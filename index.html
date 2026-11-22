@@ -129,7 +129,7 @@ function isDue(med, k){
   return ((d % n) + n) % n === 0;
 }
 function nextDue(med, fromKey){
-  for (let i=0;i<60;i++){ const k = addDays(fromKey, i); if (isDue(med,k)) return k; }
+  for (let i=0;i<400;i++){ const k = addDays(fromKey, i); if (isDue(med,k)) return k; }
   return null;
 }
 const entryFor = (medId, k) => state.log.find(e => e.med === medId && e.date === k);
@@ -332,6 +332,7 @@ function viewSettings(){
       <label>Name</label><input data-f="name" value="${esc(m.name)}">
       <div class="two"><div><label>Label</label><input data-f="slot" value="${esc(m.slot)}"></div>
       <div><label>Time</label><input type="time" data-f="time" value="${m.time}"></div></div>
+      <div class="two"><div><label>Start date</label><input type="date" data-f="since" value="${m.since}"></div><div></div></div>
       <div class="two"><div><label>How often</label><select data-f="every">
         ${[1,2,3,7].map(n=>`<option value="${n}" ${m.every==n?"selected":""}>${n===1?"Every day":n===2?"Every 2nd day":n===7?"Once a week":"Every "+n+" days"}</option>`).join("")}
       </select></div>
@@ -372,7 +373,14 @@ function collect(){
     m.slot = v("slot").trim() || "Dose";
     m.time = v("time") || "08:00";
     m.every = Math.max(1, parseInt(v("every"),10) || 1);
-    if (m.every > 1 && v("anchor")) m.anchor = v("anchor");
+    const since = v("since");
+    const sinceChanged = since && since !== m.since;
+    if (since) m.since = since;
+    if (m.every > 1) {
+      // a new start date is also the first dose day; otherwise use "Next dose date"
+      if (sinceChanged) m.anchor = m.since;
+      else if (v("anchor")) m.anchor = v("anchor");
+    }
     m.packSize = Math.max(1, parseInt(v("packSize"),10) || 28);
     const np = Math.min(m.packSize + 1, Math.max(1, parseInt(v("nextPill"),10) || 1));
     if (np !== m.nextPill){ m.nextPill = np; m.packReset = new Date().toISOString(); }
