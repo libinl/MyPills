@@ -78,6 +78,13 @@ input,select{font:inherit;width:100%;padding:11px 12px;border:1.5px solid var(--
 .sheet{background:var(--card);width:100%;max-width:560px;border-radius:20px 20px 0 0;padding:20px 20px calc(env(safe-area-inset-bottom) + 20px)}
 .sheet h3{margin:0 0 8px;font-size:20px}
 .hidden{display:none}
+.lang{display:flex;gap:6px;margin-top:10px}
+.lang button{flex:1;padding:10px;border:1.5px solid var(--line);background:var(--card);color:var(--ink);font-weight:600;font-size:15px}
+.lang button.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.err{color:var(--warn);font-size:14px;font-weight:600;margin-top:8px}
+input.bad{border-color:var(--warn)}
+.empty{text-align:center;padding:28px 16px}
+.empty .ic{font-size:40px}
 .note{font-size:14px;color:var(--muted)}
 ol.steps{padding-left:20px;margin:8px 0}ol.steps li{margin:6px 0}
 </style>
@@ -92,10 +99,10 @@ ol.steps{padding-left:20px;margin:8px 0}ol.steps li{margin:6px 0}
   <main id="main"></main>
 </div>
 <nav><div class="in">
-  <button data-tab="today" class="on"><span class="ic">💊</span>Today</button>
-  <button data-tab="pack"><span class="ic">▦</span>Pack check</button>
-  <button data-tab="history"><span class="ic">🗓</span>History</button>
-  <button data-tab="settings"><span class="ic">⚙︎</span>Settings</button>
+  <button data-tab="today" class="on"><span class="ic">💊</span><span data-t="navToday">Today</span></button>
+  <button data-tab="pack"><span class="ic">▦</span><span data-t="navPack">Pack check</span></button>
+  <button data-tab="history"><span class="ic">🗓</span><span data-t="navHistory">History</span></button>
+  <button data-tab="settings"><span class="ic">⚙︎</span><span data-t="navSettings">Settings</span></button>
 </div></nav>
 <div id="dlg"></div>
 <input type="file" id="filepick" style="position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0">
@@ -104,7 +111,132 @@ ol.steps{padding-left:20px;margin:8px 0}ol.steps li{margin:6px 0}
 (function(){
 "use strict";
 const LS_KEY = "mypills-state-v1";
-let state = null, tab = "today";
+let state = null, tab = "today", formError = "";
+
+/* ---------- settings kept on this phone only ---------- */
+function setting(k, v){ try{ if (v === undefined) return localStorage.getItem("mypills-"+k); localStorage.setItem("mypills-"+k, v); }catch(e){ return null; } }
+
+/* ---------- language ---------- */
+const STR = {
+en: {
+  navToday:"Today", navPack:"Pack check", navHistory:"History", navSettings:"Settings",
+  savedNoExport:"Saved on this phone", savedChanged:"Saved on this phone · changes since last export ({d})", savedExported:"Saved on this phone · exported {d}",
+  notRecorded:"Not recorded", today:"Today", tomorrow:"tomorrow",
+  gapHint:"Check your pack: if pill #{n} is already gone, you took it.", iTookIt:"I took it", iMissedIt:"I missed it",
+  notToday:"Not today · next dose {d} at {t}", takenAt:"Taken at {t} · pill #{n}", tappedByMistake:"Tapped by mistake?",
+  markedMissed:"Marked as missed", undo:"Undo", packFinishedNew:"Pack finished — you'll start a new pack",
+  takePill:"Take pill #{n} of {s}", startNewTake:"Start new pack & take #1", iTook:"I've taken pill #{n}",
+  noMedsTitle:"No medicines yet", noMedsBody:"Add your medicines in Settings to get started.", goSettings:"Go to Settings",
+  undoTitle:"Undo this?", undoSkip:"Remove the “missed” note for {m} on {d}.",
+  undoTaken:"This marks {m} (pill #{n}) as <b>not taken</b> and puts the pack count back to #{n}. Only do this if you tapped by mistake.",
+  yesUndo:"Yes, undo", cancel:"Cancel", ok:"OK", save:"Save",
+  packFinished:"Pack finished", packFinishedBody:"All {s} pills of {m} are used. Start a new pack? The count goes back to pill #1.", startNewPack:"Start new pack",
+  matchPack:"Match the pack", matchPackBody:"Look at your {m} pack. What number is the <b>next full pill</b> (the one you'd take next)?", nextPillNumber:"Next pill number",
+  packIntro:"Hold each pack and compare. Crossed-out pills should be empty on your pack; the circled one is the next to take.",
+  usedOf:"{u} of {s} used", lastTaken:" · last taken {d} {t}", nextPill:"Next pill", packNoMatch:"Pack doesn't match", startedNewPack:"Started a new pack",
+  newPack:"New pack", resetBody:"Reset {m} to pill #1?", resetTo1:"Reset to #1",
+  last3w:"Last 3 weeks", dosesTaken:"{a} of {b} doses recorded as taken", day:"Day", missed:"missed",
+  histKey:"✓ #7 = taken, pill number 7 · ? = not recorded · – = not due that day",
+  welcome:"Welcome 👋", welcomeBody:"My Pills reminds you which pill to take and keeps count of the pills in each pack, so you can check you haven't missed or doubled a dose.",
+  step1:"Choose your language", step2:"Add each medicine you take", step3:"Tap <b>Save & start</b>",
+  haveFile:"Moving from another phone?", importFile:"Import data file", pasteInstead:"File won't open? Paste the text instead",
+  medicine:"Medicine {n}", remove:"Remove", name:"Medicine name", namePh:"e.g. Vitamin D 1000 IU",
+  label:"When", time:"Time", startDate:"Start date", howOften:"How often",
+  every1:"Every day", every2:"Every 2nd day", every3:"Every 3 days", every7:"Once a week",
+  nextDoseDate:"Next dose date", perPack:"Pills per pack", nextOnPack:"Next pill # on pack",
+  nextOnPackHint:"New pack? Leave it at 1. Pack already started? Enter the number of the next full pill.",
+  addMed:"+ Add a medicine", addFirstMed:"+ Add your first medicine", saveStart:"Save & start", saveChanges:"Save changes",
+  errNoMeds:"Add at least one medicine first.", errName:"Please enter a name for each medicine.",
+  slotMorning:"Morning", slotLunch:"Lunch", slotAfternoon:"Afternoon", slotEvening:"Evening", slotNight:"Night", slotBedtime:"Bedtime",
+  removeMedTitle:"Remove medicine?", removeMedBody:"Remove {m} and its history?",
+  language:"Language", medsTitle:"Medicines",
+  syncTitle:"Copy to another phone / backup",
+  syncBody:"Your data stays on this phone only. To copy it to another phone, or keep a backup: tap <b>Export</b>, send the file (WhatsApp, WeChat, email, AirDrop…), then on the other phone tap <b>Import</b>. Importing combines both phones' records — nothing is lost.",
+  phoneName:"This phone's name", phoneNamePh:"e.g. iPhone or Android", exportBtn:"Export / send data",
+  lastExport:"Last export: {a} · Last import: {b}", never:"never", pasteImport:"Import by pasting text instead",
+  exported:"Exported", exportedBody:"The file <b>{f}</b> was saved to your Downloads. If you can't find it, copy the data as text and paste it into a message to yourself instead.",
+  copyText:"Copy as text", copied:"Copied ✓", cantCopy:"Couldn't copy", done:"Done",
+  readFail:"Couldn't read that file. Try “Paste the text instead”.",
+  pasteTitle:"Paste data", pasteBody:"Open the data file (or the message it came in), select all of its text, copy it, and paste it here. It starts with <code>{\"app\":\"mypills\"</code>.",
+  importBtn:"Import", importFailed:"Import failed", notOurFile:"That doesn't look like a My Pills data file.",
+  importTitle:"Import data", importSummary:"From <b>{dev}</b>, exported {when}: {m} medicine(s), {d} dose(s) recorded.",
+  anotherPhone:"another phone", unknownTime:"unknown time",
+  combineExplain:"<b>Combine</b> keeps every dose recorded on either phone (recommended). <b>Replace</b> throws away this phone's data and uses the file only.",
+  replace:"Replace", combine:"Combine", imported:"Imported ✓", importedBody:"{how}. Please check the pill numbers on the Pack check screen against your packs.",
+  howImported:"Data imported", howCombined:"Both phones' records combined", howReplaced:"Data replaced",
+  replaceTitle:"Replace this phone's data?", replaceBody:"Any doses recorded only on this phone will be lost.",
+  helpTitle:"How to use My Pills",
+  help1:"<b>Each time you take a pill,</b> open My Pills and tap the green button. It shows the pill number — check it matches the pill you just took from the pack.",
+  help2:"<b>Not sure if you took it?</b> Open <b>Pack check</b>. Crossed-out numbers should be empty on your pack. If the circled pill is already gone, you took it — tap “I took it”.",
+  help3:"<b>Forgot to tap?</b> Doses from the last 3 days that weren't recorded appear at the top of Today.",
+  help4:"<b>New pack?</b> When a pack runs out, the app asks you to start a new one. You can also use “Started a new pack” on Pack check.",
+  helpRemTitle:"Reminders",
+  helpRem:"This app can't ring when it's closed, so use your phone's alarms: a daily alarm in the Clock app for each daily medicine. For every-2nd-day medicines use the Reminders app (iPhone) or Google Calendar (Android) with Repeat → Custom → every 2 days.",
+  helpKeep:"<b>Keep your data safe:</b> don't clear your browser's website data, and use Export now and then as a backup."
+},
+zh: {
+  navToday:"今天", navPack:"药板核对", navHistory:"记录", navSettings:"设置",
+  savedNoExport:"已保存在本机", savedChanged:"已保存在本机 · 上次导出（{d}）后有新改动", savedExported:"已保存在本机 · 已于 {d} 导出",
+  notRecorded:"未记录", today:"今天", tomorrow:"明天",
+  gapHint:"请看药板：如果第 {n} 粒已经不在了，说明您已经吃过。", iTookIt:"我吃了", iMissedIt:"我漏吃了",
+  notToday:"今天不用吃 · 下次：{d} {t}", takenAt:"{t} 已服用 · 第 {n} 粒", tappedByMistake:"点错了？",
+  markedMissed:"已标记为漏服", undo:"撤销", packFinishedNew:"这板药吃完了，将开始新的一板",
+  takePill:"请服用第 {n} 粒（共 {s} 粒）", startNewTake:"开始新的一板并服用第 1 粒", iTook:"我已服用第 {n} 粒",
+  noMedsTitle:"还没有添加药物", noMedsBody:"请先在“设置”中添加您的药物。", goSettings:"去设置",
+  undoTitle:"要撤销吗？", undoSkip:"删除 {d} {m} 的“漏服”标记。",
+  undoTaken:"这会把 {m}（第 {n} 粒）改为<b>未服用</b>，药板计数退回到第 {n} 粒。只有点错时才这样做。",
+  yesUndo:"确定撤销", cancel:"取消", ok:"好", save:"保存",
+  packFinished:"这板药吃完了", packFinishedBody:"{m} 的 {s} 粒都已服用。要开始新的一板吗？计数会从第 1 粒重新开始。", startNewPack:"开始新的一板",
+  matchPack:"核对药板", matchPackBody:"请看您的 {m} 药板。<b>下一粒还没吃的药</b>是第几粒？", nextPillNumber:"下一粒的编号",
+  packIntro:"拿着药板对照：划掉的格子在药板上应该是空的；圆圈标出的是下一粒要吃的药。",
+  usedOf:"已吃 {u} / {s} 粒", lastTaken:" · 上次服用 {d} {t}", nextPill:"下一粒", packNoMatch:"和药板对不上", startedNewPack:"开始了新的一板",
+  newPack:"新的一板", resetBody:"把 {m} 重置为第 1 粒？", resetTo1:"重置为第 1 粒",
+  last3w:"最近 3 周", dosesTaken:"应服 {b} 次，已记录服用 {a} 次", day:"日期", missed:"漏服",
+  histKey:"✓ #7 = 已服用第 7 粒 · ? = 未记录 · – = 当天不用吃",
+  welcome:"欢迎使用 👋", welcomeBody:"“我的药”提醒您该吃哪一粒药，并记录每板药吃到第几粒，方便您核对有没有漏吃或多吃。",
+  step1:"选择语言", step2:"添加您要吃的每一种药", step3:"点击<b>保存并开始</b>",
+  haveFile:"从另一部手机转过来？", importFile:"导入数据文件", pasteInstead:"文件打不开？改为粘贴文字",
+  medicine:"药物 {n}", remove:"删除", name:"药名", namePh:"例如：维生素D 1000IU",
+  label:"服用时段", time:"时间", startDate:"开始日期", howOften:"服用频率",
+  every1:"每天", every2:"隔天一次", every3:"每 3 天一次", every7:"每周一次",
+  nextDoseDate:"下次服用日期", perPack:"每板粒数", nextOnPack:"药板上下一粒的编号",
+  nextOnPackHint:"新的一板请填 1；已经吃过几粒的，请填下一粒还没吃的药的编号。",
+  addMed:"+ 添加药物", addFirstMed:"+ 添加第一种药", saveStart:"保存并开始", saveChanges:"保存修改",
+  errNoMeds:"请至少添加一种药。", errName:"请为每种药填写药名。",
+  slotMorning:"早上", slotLunch:"中午", slotAfternoon:"下午", slotEvening:"傍晚", slotNight:"晚上", slotBedtime:"睡前",
+  removeMedTitle:"删除这种药？", removeMedBody:"删除 {m} 及其服药记录？",
+  language:"语言 Language", medsTitle:"药物",
+  syncTitle:"复制到另一部手机 / 备份",
+  syncBody:"您的数据只保存在这部手机上。如要复制到另一部手机或做备份：点<b>导出</b>，把文件发出去（微信、WhatsApp、邮件、隔空投送……），然后在另一部手机上点<b>导入</b>。导入时会合并两部手机的记录，不会丢失。",
+  phoneName:"这部手机的名称", phoneNamePh:"例如：iPhone 或 安卓", exportBtn:"导出 / 发送数据",
+  lastExport:"上次导出：{a} · 上次导入：{b}", never:"从未", pasteImport:"改为粘贴文字导入",
+  exported:"已导出", exportedBody:"文件 <b>{f}</b> 已保存到“下载”。如果找不到，可以把数据复制成文字，粘贴到发给自己的消息里。",
+  copyText:"复制为文字", copied:"已复制 ✓", cantCopy:"复制失败", done:"完成",
+  readFail:"无法读取这个文件。请试试“改为粘贴文字”。",
+  pasteTitle:"粘贴数据", pasteBody:"打开数据文件（或收到它的消息），全选并复制里面的文字，然后粘贴到这里。内容以 <code>{\"app\":\"mypills\"</code> 开头。",
+  importBtn:"导入", importFailed:"导入失败", notOurFile:"这不像是“我的药”的数据文件。",
+  importTitle:"导入数据", importSummary:"来自 <b>{dev}</b>，导出时间 {when}：{m} 种药，{d} 次服药记录。",
+  anotherPhone:"另一部手机", unknownTime:"未知时间",
+  combineExplain:"<b>合并</b>会保留两部手机上的所有服药记录（推荐）。<b>替换</b>会删除本机数据，只用文件里的数据。",
+  replace:"替换", combine:"合并", imported:"导入成功 ✓", importedBody:"{how}。请在“药板核对”页面对照您的药板检查编号。",
+  howImported:"数据已导入", howCombined:"两部手机的记录已合并", howReplaced:"数据已替换",
+  replaceTitle:"替换本机数据？", replaceBody:"只记录在本机上的服药记录将会丢失。",
+  helpTitle:"使用说明",
+  help1:"<b>每次吃药后，</b>打开“我的药”，点绿色按钮。按钮上会显示药的编号，请核对是否和您刚从药板上取下的那粒一致。",
+  help2:"<b>不确定吃没吃？</b>打开<b>药板核对</b>。划掉的编号在药板上应该是空的。如果圆圈标出的那粒已经不在了，说明您吃过了，点“我吃了”。",
+  help3:"<b>忘记点了？</b>最近 3 天没有记录的服药会显示在“今天”页面的最上面。",
+  help4:"<b>换新药板？</b>一板吃完时，应用会提示您开始新的一板。也可以在“药板核对”里点“开始了新的一板”。",
+  helpRemTitle:"提醒",
+  helpRem:"应用关闭时无法响铃，请使用手机自带的闹钟：每天吃的药，在“时钟”里设一个每天的闹钟。隔天吃的药，用“提醒事项”（iPhone）或 Google 日历（安卓），重复 → 自定义 → 每 2 天。",
+  helpKeep:"<b>保护好数据：</b>不要清除浏览器的网站数据，并经常用“导出”做备份。"
+}};
+let lang = setting("lang") || ((navigator.language || "").toLowerCase().startsWith("zh") ? "zh" : "en");
+function t(key, vars){
+  let s = (STR[lang] && STR[lang][key]) || STR.en[key] || key;
+  if (vars) for (const k in vars) s = s.split("{"+k+"}").join(vars[k]);
+  return s;
+}
+const loc = () => lang === "zh" ? "zh-CN" : undefined;
 
 /* ---------- dates ---------- */
 const pad = n => String(n).padStart(2,"0");
@@ -114,9 +246,9 @@ const todayKey = () => keyOf(new Date());
 const addDays = (k, n) => { const d = parseKey(k); d.setDate(d.getDate()+n); return keyOf(d); };
 const dayDiff = (a, b) => { const A = parseKey(a), B = parseKey(b);
   return Math.round((Date.UTC(B.getFullYear(),B.getMonth(),B.getDate()) - Date.UTC(A.getFullYear(),A.getMonth(),A.getDate()))/864e5); };
-const fmtDay = k => parseKey(k).toLocaleDateString(undefined,{weekday:"short", day:"numeric", month:"short"});
-const fmtTime = iso => new Date(iso).toLocaleTimeString(undefined,{hour:"numeric", minute:"2-digit"});
-const fmtHM = hm => { const [h,m] = hm.split(":").map(Number); const d = new Date(); d.setHours(h,m,0,0); return d.toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"}); };
+const fmtDay = k => parseKey(k).toLocaleDateString(loc(),{weekday:"short", day:"numeric", month:"short"});
+const fmtTime = iso => new Date(iso).toLocaleTimeString(loc(),{hour:"numeric", minute:"2-digit"});
+const fmtHM = hm => { const [h,m] = hm.split(":").map(Number); const d = new Date(); d.setHours(h,m,0,0); return d.toLocaleTimeString(loc(),{hour:"numeric",minute:"2-digit"}); };
 const uid = () => Math.random().toString(36).slice(2,10);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 
@@ -133,15 +265,20 @@ function nextDue(med, fromKey){
   return null;
 }
 const entryFor = (medId, k) => state.log.find(e => e.med === medId && e.date === k);
+const med = id => state.meds.find(m => m.id === id);
+// An empty label means "automatic": named from the time, in the current language.
+function slotFor(m){
+  if (m.slot && m.slot.trim()) return m.slot;
+  const h = parseInt((m.time||"08:00").split(":")[0],10);
+  return t(h < 11 ? "slotMorning" : h < 14 ? "slotLunch" : h < 17 ? "slotAfternoon" : h < 20 ? "slotEvening" : h < 22 ? "slotNight" : "slotBedtime");
+}
+const byTime = () => [...state.meds].sort((a,b) => a.time.localeCompare(b.time));
 
 /* ---------- defaults ---------- */
-function defaultState(){
-  const t = todayKey();
-  return { v:1, setupDone:false, meds:[
-    {id:uid(), name:"Morning tablet", slot:"Morning", time:"08:00", every:1, anchor:t, since:t, packSize:28, nextPill:1},
-    {id:uid(), name:"Lunch tablet",   slot:"Lunch",   time:"12:30", every:1, anchor:t, since:t, packSize:28, nextPill:1},
-    {id:uid(), name:"Night tablet",   slot:"Night (every 2nd night)", time:"21:00", every:2, anchor:t, since:t, packSize:28, nextPill:1}
-  ], log:[] };
+function defaultState(){ return { v:1, setupDone:false, meds:[], log:[] }; }
+function newMed(){
+  const t0 = todayKey();
+  return {id:uid(), name:"", slot:"", time:"08:00", every:1, anchor:t0, since:t0, packSize:28, nextPill:1};
 }
 
 /* ---------- storage ---------- */
@@ -153,232 +290,276 @@ function persist(){
   state.updated = new Date().toISOString();
   saveLocal(); showSyncLine();
 }
-function setting(k, v){ try{ if (v === undefined) return localStorage.getItem("mypills-"+k); localStorage.setItem("mypills-"+k, v); }catch(e){ return null; } }
 function showSyncLine(){
   const el = document.getElementById("sync"); if (!el) return;
+  if (!state.setupDone){ el.textContent = ""; return; }
   const last = setting("lastExport");
   const changed = last && state.updated && state.updated > last;
   el.className = "sync" + (changed ? " bad" : "");
-  el.textContent = !last ? "Saved on this phone · not exported yet"
-    : changed ? "Saved on this phone · changes since last export (" + fmtDay(keyOf(new Date(last))) + ")"
-    : "Saved on this phone · exported " + fmtDay(keyOf(new Date(last)));
+  el.textContent = !last ? t("savedNoExport")
+    : changed ? t("savedChanged",{d:fmtDay(keyOf(new Date(last)))})
+    : t("savedExported",{d:fmtDay(keyOf(new Date(last)))});
 }
 
 /* ---------- actions ---------- */
-function takeDose(med, k){
-  if (entryFor(med.id, k)) return; // never double-log
-  if (med.nextPill > med.packSize) { askNewPack(med, () => takeDose(med, k)); return; }
-  state.log.push({id:uid(), med:med.id, date:k, at:new Date().toISOString(), pill:med.nextPill});
-  med.nextPill++;
+function takeDose(m, k){
+  if (entryFor(m.id, k)) return; // never double-log
+  if (m.nextPill > m.packSize) { askNewPack(m, () => takeDose(m, k)); return; }
+  state.log.push({id:uid(), med:m.id, date:k, at:new Date().toISOString(), pill:m.nextPill});
+  m.nextPill++;
   persist(); render();
 }
-function skipDose(med, k){
-  if (entryFor(med.id, k)) return;
-  state.log.push({id:uid(), med:med.id, date:k, at:new Date().toISOString(), skipped:true});
+function skipDose(m, k){
+  if (entryFor(m.id, k)) return;
+  state.log.push({id:uid(), med:m.id, date:k, at:new Date().toISOString(), skipped:true});
   persist(); render();
 }
-function undo(med, k){
-  const e = entryFor(med.id, k); if (!e) return;
-  confirmSheet("Undo this?",
-    e.skipped ? `Remove the “skipped” note for ${esc(med.name)} on ${fmtDay(k)}.`
-              : `This marks ${esc(med.name)} (pill #${e.pill}) as <b>not taken</b> and puts the pack count back to #${e.pill}. Only do this if you tapped by mistake.`,
-    "Yes, undo", () => {
+function undo(m, k){
+  const e = entryFor(m.id, k); if (!e) return;
+  confirmSheet(t("undoTitle"),
+    e.skipped ? t("undoSkip",{m:esc(m.name), d:fmtDay(k)}) : t("undoTaken",{m:esc(m.name), n:e.pill}),
+    t("yesUndo"), () => {
       state.log = state.log.filter(x => x !== e); (state.removed = state.removed || []).push(e.id);
-      if (!e.skipped && e.pill === med.nextPill - 1) med.nextPill--;
+      if (!e.skipped && e.pill === m.nextPill - 1) m.nextPill--;
       persist(); render();
     });
 }
-function askNewPack(med, then){
-  confirmSheet("Pack finished",
-    `All ${med.packSize} pills of ${esc(med.name)} are used. Start a new pack? The count goes back to pill #1.`,
-    "Start new pack", () => { med.nextPill = 1; med.packReset = new Date().toISOString(); persist(); if (then) then(); else render(); });
+function askNewPack(m, then){
+  confirmSheet(t("packFinished"), t("packFinishedBody",{s:m.packSize, m:esc(m.name)}), t("startNewPack"),
+    () => { m.nextPill = 1; m.packReset = new Date().toISOString(); persist(); if (then) then(); else render(); });
 }
 
 /* ---------- dialog ---------- */
 function closeDlg(){ document.getElementById("dlg").innerHTML = ""; }
-function confirmSheet(title, html, okText, onOk){
+function confirmSheet(title, html, okText, onOk, noCancel){
   const d = document.getElementById("dlg");
   d.innerHTML = `<div class="scrim"><div class="sheet"><h3>${title}</h3><p class="note">${html}</p>
-    <div class="btnrow"><button class="btn ghost" data-x>Cancel</button><button class="btn" data-ok>${okText}</button></div></div></div>`;
-  d.querySelector("[data-x]").onclick = closeDlg;
+    <div class="btnrow">${noCancel ? "" : `<button class="btn ghost" data-x>${t("cancel")}</button>`}<button class="btn" data-ok>${okText}</button></div></div></div>`;
+  const x = d.querySelector("[data-x]"); if (x) x.onclick = closeDlg;
   d.querySelector(".scrim").onclick = ev => { if (ev.target.classList.contains("scrim")) closeDlg(); };
   d.querySelector("[data-ok]").onclick = () => { closeDlg(); onOk(); };
 }
-function numberSheet(med){
+function infoSheet(title, html){ confirmSheet(title, html, t("ok"), () => {}, true); }
+function numberSheet(m){
   const d = document.getElementById("dlg");
-  d.innerHTML = `<div class="scrim"><div class="sheet"><h3>Match the pack</h3>
-    <p class="note">Look at your ${esc(med.name)} pack. What number is the <b>next full pill</b> (the one you'd take next)?</p>
-    <label>Next pill number</label><input type="number" inputmode="numeric" min="1" max="${med.packSize+1}" value="${med.nextPill}" id="np">
-    <div class="btnrow"><button class="btn ghost" data-x>Cancel</button><button class="btn" data-ok>Save</button></div></div></div>`;
+  d.innerHTML = `<div class="scrim"><div class="sheet"><h3>${t("matchPack")}</h3>
+    <p class="note">${t("matchPackBody",{m:esc(m.name)})}</p>
+    <label>${t("nextPillNumber")}</label><input type="number" inputmode="numeric" min="1" max="${m.packSize+1}" value="${m.nextPill}" id="np">
+    <div class="btnrow"><button class="btn ghost" data-x>${t("cancel")}</button><button class="btn" data-ok>${t("save")}</button></div></div></div>`;
   d.querySelector("[data-x]").onclick = closeDlg;
   d.querySelector("[data-ok]").onclick = () => {
     const v = parseInt(d.querySelector("#np").value, 10);
-    if (v >= 1 && v <= med.packSize + 1){ med.nextPill = v; med.packReset = new Date().toISOString(); persist(); }
+    if (v >= 1 && v <= m.packSize + 1){ m.nextPill = v; m.packReset = new Date().toISOString(); persist(); }
     closeDlg(); render();
   };
 }
 
 /* ---------- views ---------- */
-function viewToday(){
-  const t = todayKey();
-  const meds = [...state.meds].sort((a,b) => a.time.localeCompare(b.time));
-  let html = "";
+function emptyHtml(){
+  return `<div class="card empty" style="margin-top:16px"><div class="ic">💊</div><div class="name">${t("noMedsTitle")}</div>
+    <p class="note">${t("noMedsBody")}</p><button class="btn" data-gosettings>${t("goSettings")}</button></div>`;
+}
+function wireEmpty(main){ const b = main.querySelector("[data-gosettings]"); if (b) b.onclick = () => { tab = "settings"; render(); }; }
 
-  // Not-recorded doses from the last 3 days
+function viewToday(){
+  const main = document.getElementById("main");
+  if (!state.meds.length){ main.innerHTML = emptyHtml(); wireEmpty(main); return; }
+  const td = todayKey(), meds = byTime();
+  let html = "";
   const gaps = [];
-  for (let i=3;i>=1;i--){ const k = addDays(t,-i);
+  for (let i=3;i>=1;i--){ const k = addDays(td,-i);
     meds.forEach(m => { if (isDue(m,k) && !entryFor(m.id,k)) gaps.push({m,k}); }); }
   if (gaps.length){
-    html += `<h2>Not recorded</h2>`;
+    html += `<h2>${t("notRecorded")}</h2>`;
     gaps.forEach(({m,k},i) => {
-      html += `<div class="card alert"><div class="slot">${fmtDay(k)} · ${esc(m.slot)}</div>
+      html += `<div class="card alert"><div class="slot">${fmtDay(k)} · ${esc(slotFor(m))}</div>
         <div class="name">${esc(m.name)}</div>
-        <div class="sub">Check your pack: if pill <span class="pillno">#${m.nextPill}</span> is already gone, you took it.</div>
-        <div class="btnrow"><button class="btn small" data-gap-take="${i}">I took it</button>
-        <button class="btn small ghost" data-gap-skip="${i}">I missed it</button></div></div>`;
+        <div class="sub">${t("gapHint",{n:m.nextPill})}</div>
+        <div class="btnrow"><button class="btn small" data-gap-take="${i}">${t("iTookIt")}</button>
+        <button class="btn small ghost" data-gap-skip="${i}">${t("iMissedIt")}</button></div></div>`;
     });
   }
-
-  html += `<h2>Today</h2>`;
+  html += `<h2>${t("today")}</h2>`;
   meds.forEach(m => {
-    const due = isDue(m,t), e = entryFor(m.id,t);
+    const due = isDue(m,td), e = entryFor(m.id,td);
     if (!due){
-      const nd = nextDue(m, t);
-      html += `<div class="card off"><div class="slot">${esc(m.slot)}</div><div class="name">${esc(m.name)}</div>
-        <div class="sub">Not today · next dose ${nd ? (nd===addDays(t,1) ? "tomorrow" : fmtDay(nd)) : "—"} at ${fmtHM(m.time)}</div></div>`;
+      const nd = nextDue(m, td);
+      html += `<div class="card off"><div class="slot">${esc(slotFor(m))}</div><div class="name">${esc(m.name)}</div>
+        <div class="sub">${t("notToday",{d: nd ? (nd===addDays(td,1) ? t("tomorrow") : fmtDay(nd)) : "—", t:fmtHM(m.time)})}</div></div>`;
     } else if (e && !e.skipped){
       html += `<div class="card taken"><div class="row"><div class="tick">✓</div><div class="grow">
-        <div class="slot">${esc(m.slot)}</div><div class="name">${esc(m.name)}</div>
-        <div class="sub">Taken at ${fmtTime(e.at)} · pill <span class="pillno">#${e.pill}</span></div></div></div>
-        <div style="text-align:right"><button class="link" data-undo="${m.id}">Tapped by mistake?</button></div></div>`;
+        <div class="slot">${esc(slotFor(m))}</div><div class="name">${esc(m.name)}</div>
+        <div class="sub">${t("takenAt",{t:fmtTime(e.at), n:e.pill})}</div></div></div>
+        <div style="text-align:right"><button class="link" data-undo="${m.id}">${t("tappedByMistake")}</button></div></div>`;
     } else if (e && e.skipped){
-      html += `<div class="card alert"><div class="slot">${esc(m.slot)}</div><div class="name">${esc(m.name)}</div>
-        <div class="sub">Marked as missed</div><div style="text-align:right"><button class="link" data-undo="${m.id}">Undo</button></div></div>`;
+      html += `<div class="card alert"><div class="slot">${esc(slotFor(m))}</div><div class="name">${esc(m.name)}</div>
+        <div class="sub">${t("markedMissed")}</div><div style="text-align:right"><button class="link" data-undo="${m.id}">${t("undo")}</button></div></div>`;
     } else {
       const over = m.nextPill > m.packSize;
-      html += `<div class="card"><div class="slot">${esc(m.slot)} · ${fmtHM(m.time)}</div><div class="name">${esc(m.name)}</div>
-        <div class="sub">${over ? "Pack finished — you'll start a new pack" : `Take pill <span class="pillno">#${m.nextPill}</span> of ${m.packSize}`}</div>
-        <button class="btn" data-take="${m.id}">${over ? "Start new pack & take #1" : `I've taken pill #${m.nextPill}`}</button></div>`;
+      html += `<div class="card"><div class="slot">${esc(slotFor(m))} · ${fmtHM(m.time)}</div><div class="name">${esc(m.name)}</div>
+        <div class="sub">${over ? t("packFinishedNew") : t("takePill",{n:m.nextPill, s:m.packSize})}</div>
+        <button class="btn" data-take="${m.id}">${over ? t("startNewTake") : t("iTook",{n:m.nextPill})}</button></div>`;
     }
   });
-  const main = document.getElementById("main"); main.innerHTML = html;
-  main.querySelectorAll("[data-take]").forEach(b => b.onclick = () => takeDose(med(b.dataset.take), t));
-  main.querySelectorAll("[data-undo]").forEach(b => b.onclick = () => undo(med(b.dataset.undo), t));
+  main.innerHTML = html;
+  main.querySelectorAll("[data-take]").forEach(b => b.onclick = () => takeDose(med(b.dataset.take), td));
+  main.querySelectorAll("[data-undo]").forEach(b => b.onclick = () => undo(med(b.dataset.undo), td));
   main.querySelectorAll("[data-gap-take]").forEach(b => b.onclick = () => { const g = gaps[+b.dataset.gapTake]; takeDose(g.m, g.k); });
   main.querySelectorAll("[data-gap-skip]").forEach(b => b.onclick = () => { const g = gaps[+b.dataset.gapSkip]; skipDose(g.m, g.k); });
 }
 
 function viewPack(){
-  let html = `<p class="note" style="margin:16px 4px 0">Hold each pack and compare. Crossed-out pills should be empty on your pack; the circled one is the next to take.</p>`;
-  state.meds.forEach(m => {
+  const main = document.getElementById("main");
+  if (!state.meds.length){ main.innerHTML = emptyHtml(); wireEmpty(main); return; }
+  let html = `<p class="note" style="margin:16px 4px 0">${t("packIntro")}</p>`;
+  byTime().forEach(m => {
     const used = Math.min(m.nextPill - 1, m.packSize);
     let cells = "";
-    for (let i=1;i<=m.packSize;i++){
-      cells += `<div class="cell ${i < m.nextPill ? "used" : (i === m.nextPill ? "next" : "")}">${i}</div>`;
-    }
+    for (let i=1;i<=m.packSize;i++) cells += `<div class="cell ${i < m.nextPill ? "used" : (i === m.nextPill ? "next" : "")}">${i}</div>`;
     const last = state.log.filter(e => e.med === m.id && !e.skipped).sort((a,b)=>b.at.localeCompare(a.at))[0];
-    html += `<h2>${esc(m.slot)}</h2><div class="card">
+    html += `<h2>${esc(slotFor(m))}</h2><div class="card">
       <div class="row"><div class="grow"><div class="name">${esc(m.name)}</div>
-      <div class="sub">${used} of ${m.packSize} used${last ? ` · last taken ${fmtDay(last.date)} ${fmtTime(last.at)}` : ""}</div></div>
-      <div style="text-align:right"><div class="sub">Next pill</div><div class="big">${m.nextPill > m.packSize ? "✓" : "#"+m.nextPill}</div></div></div>
+      <div class="sub">${t("usedOf",{u:used, s:m.packSize})}${last ? t("lastTaken",{d:fmtDay(last.date), t:fmtTime(last.at)}) : ""}</div></div>
+      <div style="text-align:right"><div class="sub">${t("nextPill")}</div><div class="big">${m.nextPill > m.packSize ? "✓" : "#"+m.nextPill}</div></div></div>
       <div class="pack">${cells}</div>
-      <div class="btnrow"><button class="btn small ghost" data-fix="${m.id}">Pack doesn't match</button>
-      <button class="btn small ghost" data-new="${m.id}">Started a new pack</button></div></div>`;
+      <div class="btnrow"><button class="btn small ghost" data-fix="${m.id}">${t("packNoMatch")}</button>
+      <button class="btn small ghost" data-new="${m.id}">${t("startedNewPack")}</button></div></div>`;
   });
-  const main = document.getElementById("main"); main.innerHTML = html;
+  main.innerHTML = html;
   main.querySelectorAll("[data-fix]").forEach(b => b.onclick = () => numberSheet(med(b.dataset.fix)));
   main.querySelectorAll("[data-new]").forEach(b => b.onclick = () => {
     const m = med(b.dataset.new);
-    confirmSheet("New pack", `Reset ${esc(m.name)} to pill #1?`, "Reset to #1", () => { m.nextPill = 1; m.packReset = new Date().toISOString(); persist(); render(); });
+    confirmSheet(t("newPack"), t("resetBody",{m:esc(m.name)}), t("resetTo1"), () => { m.nextPill = 1; m.packReset = new Date().toISOString(); persist(); render(); });
   });
 }
 
 function viewHistory(){
-  const t = todayKey();
-  const meds = [...state.meds].sort((a,b) => a.time.localeCompare(b.time));
+  const main = document.getElementById("main");
+  if (!state.meds.length){ main.innerHTML = emptyHtml(); wireEmpty(main); return; }
+  const td = todayKey(), meds = byTime();
   let rows = "", taken = 0, due = 0;
   for (let i=0;i<21;i++){
-    const k = addDays(t,-i);
-    rows += `<tr><td>${i===0 ? "Today" : fmtDay(k)}</td>` + meds.map(m => {
+    const k = addDays(td,-i);
+    rows += `<tr><td>${i===0 ? t("today") : fmtDay(k)}</td>` + meds.map(m => {
       if (!isDue(m,k)) return `<td class="na">–</td>`;
       const e = entryFor(m.id,k);
       if (i>0 || e) due++;
       if (e && !e.skipped){ taken++; return `<td class="ok">✓ #${e.pill}</td>`; }
-      if (e && e.skipped) return `<td class="miss">missed</td>`;
+      if (e && e.skipped) return `<td class="miss">${t("missed")}</td>`;
       return i===0 ? `<td class="na">…</td>` : `<td class="miss">?</td>`;
     }).join("") + `</tr>`;
   }
   const pct = due ? Math.round(taken/due*100) : 100;
-  document.getElementById("main").innerHTML = `
-    <div class="card" style="margin-top:16px"><div class="row"><div class="grow"><div class="name">Last 3 weeks</div>
-    <div class="sub">${taken} of ${due} doses recorded as taken</div></div><div class="big">${pct}%</div></div></div>
-    <div class="card"><table><thead><tr><th>Day</th>${meds.map(m=>`<th>${esc(m.slot.split(" ")[0])}</th>`).join("")}</tr></thead>
+  main.innerHTML = `
+    <div class="card" style="margin-top:16px"><div class="row"><div class="grow"><div class="name">${t("last3w")}</div>
+    <div class="sub">${t("dosesTaken",{a:taken, b:due})}</div></div><div class="big">${pct}%</div></div></div>
+    <div class="card"><table><thead><tr><th>${t("day")}</th>${meds.map(m=>`<th>${esc(m.name.split(" ")[0])}</th>`).join("")}</tr></thead>
     <tbody>${rows}</tbody></table>
-    <p class="note">✓ #7 = taken, pill number 7 · ? = not recorded · – = not due that day</p></div>`;
+    <p class="note">${t("histKey")}</p></div>`;
 }
 
+function langPicker(){
+  return `<div class="lang"><button data-lang="en" class="${lang==="en"?"on":""}">English</button><button data-lang="zh" class="${lang==="zh"?"on":""}">中文</button></div>`;
+}
+function medCardHtml(m, idx){
+  const nd = m.every > 1 ? (nextDue(m, todayKey()) || m.anchor) : todayKey();
+  const slots = ["slotMorning","slotLunch","slotAfternoon","slotEvening","slotNight","slotBedtime"].map(k => `<option value="${esc(t(k))}">`).join("");
+  return `<div class="card" data-med="${m.id}">
+    <div class="row"><div class="grow name" style="font-size:17px">${t("medicine",{n:idx+1})}</div>
+    <button class="link" data-del="${m.id}">${t("remove")}</button></div>
+    <label>${t("name")}</label><input data-f="name" value="${esc(m.name)}" placeholder="${esc(t("namePh"))}" class="${formError && !m.name.trim() ? "bad" : ""}">
+    <div class="two"><div><label>${t("label")}</label><input data-f="slot" list="slotlist" value="${esc(m.slot)}" placeholder="${esc(slotFor({time:m.time}))}"><datalist id="slotlist">${slots}</datalist></div>
+    <div><label>${t("time")}</label><input type="time" data-f="time" value="${m.time}"></div></div>
+    <div class="two"><div><label>${t("howOften")}</label><select data-f="every">
+      ${[1,2,3,7].map(n=>`<option value="${n}" ${m.every==n?"selected":""}>${t("every"+n)}</option>`).join("")}
+    </select></div>
+    <div><label>${t("startDate")}</label><input type="date" data-f="since" value="${m.since}"></div></div>
+    <div class="${m.every>1 && state.setupDone ? "" : "hidden"}" data-anchorbox><label>${t("nextDoseDate")}</label><input type="date" data-f="anchor" value="${nd}"></div>
+    <div class="two"><div><label>${t("perPack")}</label><input type="number" inputmode="numeric" min="1" max="200" data-f="packSize" value="${m.packSize}"></div>
+    <div><label>${t("nextOnPack")}</label><input type="number" inputmode="numeric" min="1" data-f="nextPill" value="${m.nextPill}"></div></div>
+    <p class="note" style="margin-bottom:0">${t("nextOnPackHint")}</p>
+  </div>`;
+}
+function helpHtml(){
+  return `<h2>${t("helpTitle")}</h2><div class="card"><ol class="steps note" style="margin-top:0">
+    <li>${t("help1")}</li><li>${t("help2")}</li><li>${t("help3")}</li><li>${t("help4")}</li></ol>
+    <p class="note"><b>${t("helpRemTitle")}:</b> ${t("helpRem")}</p><p class="note" style="margin-bottom:0">${t("helpKeep")}</p></div>`;
+}
 function viewSettings(){
   const first = !state.setupDone;
-  let html = first ? `<div class="card" style="margin-top:16px;border-color:var(--accent)"><div class="name">Welcome 👋</div>
-    <p class="note">Have a My Pills data file from your other phone? Import it and you're done:</p>
-    <button class="btn" data-import>Import data file</button>
-    <div style="text-align:center;margin-top:6px"><button class="link" data-paste>File won't open? Paste the text instead</button></div>
-    <p class="note">Or set up your medicines below. For each pack, enter how many pills it holds and the number of the <b>next full pill</b> on the pack right now.</p></div>` : syncCardHtml();
-  state.meds.forEach((m,idx) => {
-    const nd = m.every > 1 ? nextDue(m, todayKey()) : todayKey();
-    html += `<div class="card" data-med="${m.id}">
-      <div class="row"><div class="grow name" style="font-size:17px">Medicine ${idx+1}</div>
-      ${state.meds.length>1 ? `<button class="link" data-del="${m.id}">Remove</button>` : ""}</div>
-      <label>Name</label><input data-f="name" value="${esc(m.name)}">
-      <div class="two"><div><label>Label</label><input data-f="slot" value="${esc(m.slot)}"></div>
-      <div><label>Time</label><input type="time" data-f="time" value="${m.time}"></div></div>
-      <div class="two"><div><label>Start date</label><input type="date" data-f="since" value="${m.since}"></div><div></div></div>
-      <div class="two"><div><label>How often</label><select data-f="every">
-        ${[1,2,3,7].map(n=>`<option value="${n}" ${m.every==n?"selected":""}>${n===1?"Every day":n===2?"Every 2nd day":n===7?"Once a week":"Every "+n+" days"}</option>`).join("")}
-      </select></div>
-      <div class="${m.every>1?"":"hidden"}" data-anchorbox><label>Next dose date</label><input type="date" data-f="anchor" value="${nd}"></div></div>
-      <div class="two"><div><label>Pills per pack</label><input type="number" inputmode="numeric" min="1" max="200" data-f="packSize" value="${m.packSize}"></div>
-      <div><label>Next pill # on pack</label><input type="number" inputmode="numeric" min="1" data-f="nextPill" value="${m.nextPill}"></div></div>
-    </div>`;
-  });
-  html += `<button class="btn ghost" id="add">+ Add another medicine</button>
-    <button class="btn" id="save">${first ? "Save & start" : "Save changes"}</button>
-    <h2>Reminders</h2><div class="card"><p class="note" style="margin-top:0">This app can't buzz your phone when it's closed, so let your phone's own alarms do that.</p>
-    <ol class="steps note">
-      
-      <li><b>Morning &amp; lunch:</b> set two daily alarms in the Clock app.</li>
-      <li><b>Every 2nd night:</b> Clock alarms can't skip days, so use the Reminders app (iPhone: Repeat → Custom → every 2 days) or Google Calendar / Google Tasks (Repeat → Custom → every 2 days).</li>
-      <li>When it goes off: take the pill, open My Pills, tap the button. The pill number shown should match the pack in your hand.</li>
-    </ol></div>`;
+  let html = "";
+  if (first){
+    html += `<div class="card" style="margin-top:16px;border-color:var(--accent)"><div class="name">${t("welcome")}</div>
+      <p class="note">${t("welcomeBody")}</p>
+      <ol class="steps note"><li>${t("step1")}</li><li>${t("step2")}</li><li>${t("step3")}</li></ol>
+      ${langPicker()}</div>`;
+  } else {
+    html += `<h2>${t("language")}</h2><div class="card" style="padding:12px">${langPicker()}</div>`;
+  }
+  html += `<h2>${t("medsTitle")}</h2>`;
+  state.meds.forEach((m,idx) => { html += medCardHtml(m, idx); });
+  html += `<button class="btn ghost" id="add">${state.meds.length ? t("addMed") : t("addFirstMed")}</button>
+    ${formError ? `<div class="err">${formError}</div>` : ""}
+    <button class="btn" id="save">${first ? t("saveStart") : t("saveChanges")}</button>`;
+  if (first){
+    html += `<h2>${t("haveFile")}</h2><div class="card"><button class="btn ghost" data-import style="margin-top:0">${t("importFile")}</button>
+      <div style="text-align:center;margin-top:6px"><button class="link" data-paste>${t("pasteInstead")}</button></div></div>`;
+  } else {
+    html += syncCardHtml();
+  }
+  html += helpHtml();
   const main = document.getElementById("main"); main.innerHTML = html;
   wireSync(main);
+  main.querySelectorAll("[data-lang]").forEach(b => b.onclick = () => {
+    collect(); lang = b.dataset.lang; setting("lang", lang);
+    // translate untouched default labels on new, unsaved medicines
+    render();
+  });
+  main.querySelectorAll("input[data-f=time]").forEach(inp => inp.onchange = () => {
+    const sl = inp.closest(".card").querySelector("[data-f=slot]"); sl.placeholder = slotFor({time: inp.value});
+  });
   main.querySelectorAll("select[data-f=every]").forEach(s => s.onchange = () => {
-    s.closest(".card").querySelector("[data-anchorbox]").classList.toggle("hidden", s.value === "1");
+    if (state.setupDone) s.closest(".card").querySelector("[data-anchorbox]").classList.toggle("hidden", s.value === "1");
   });
   main.querySelectorAll("[data-del]").forEach(b => b.onclick = () => {
+    collect();
     const m = med(b.dataset.del);
-    confirmSheet("Remove medicine?", `Remove ${esc(m.name)} and its history?`, "Remove", () => {
-      state.meds = state.meds.filter(x => x !== m); state.removed = (state.removed||[]).concat(state.log.filter(e => e.med === m.id).map(e => e.id)); state.log = state.log.filter(e => e.med !== m.id); persist(); render();
-    });
+    const doRemove = () => {
+      state.meds = state.meds.filter(x => x !== m);
+      state.removed = (state.removed||[]).concat(state.log.filter(e => e.med === m.id).map(e => e.id));
+      state.log = state.log.filter(e => e.med !== m.id);
+      if (state.setupDone) persist(); render();
+    };
+    if (!m.name.trim() && !state.log.some(e => e.med === m.id)) doRemove();
+    else confirmSheet(t("removeMedTitle"), t("removeMedBody",{m:esc(m.name)}), t("remove"), doRemove);
   });
-  main.querySelector("#add").onclick = () => { collect(); const t = todayKey();
-    state.meds.push({id:uid(), name:"New medicine", slot:"Evening", time:"18:00", every:1, anchor:t, since:t, packSize:28, nextPill:1}); render(); };
-  main.querySelector("#save").onclick = () => { collect(); state.setupDone = true; persist(); tab = "today"; render(); };
+  main.querySelector("#add").onclick = () => {
+    collect(); formError = ""; state.meds.push(newMed()); render();
+    const cards = document.querySelectorAll("[data-med]"); const last = cards[cards.length-1];
+    if (last){ last.scrollIntoView({behavior:"smooth", block:"start"}); const n = last.querySelector("[data-f=name]"); if (n) setTimeout(() => n.focus(), 300); }
+  };
+  main.querySelector("#save").onclick = () => {
+    collect();
+    if (!state.meds.length){ formError = t("errNoMeds"); render(); return; }
+    if (state.meds.some(m => !m.name.trim())){ formError = t("errName"); render(); return; }
+    formError = ""; state.setupDone = true; persist(); tab = "today"; render(); window.scrollTo(0,0);
+  };
 }
 function collect(){
   document.querySelectorAll("[data-med]").forEach(card => {
     const m = med(card.dataset.med); if (!m) return;
     const v = f => card.querySelector(`[data-f=${f}]`).value;
-    m.name = v("name").trim() || "Medicine";
-    m.slot = v("slot").trim() || "Dose";
+    m.name = v("name").trim();
+    m.slot = v("slot").trim();
     m.time = v("time") || "08:00";
-    m.every = Math.max(1, parseInt(v("every"),10) || 1);
+    const every = Math.max(1, parseInt(v("every"),10) || 1);
+    const everyChanged = every !== m.every; m.every = every;
     const since = v("since");
     const sinceChanged = since && since !== m.since;
     if (since) m.since = since;
     if (m.every > 1) {
-      // a new start date is also the first dose day; otherwise use "Next dose date"
-      if (sinceChanged) m.anchor = m.since;
+      // a new start date (or newly every-N) makes the start date the first dose day
+      if (sinceChanged || everyChanged || !state.setupDone) m.anchor = m.since;
       else if (v("anchor")) m.anchor = v("anchor");
     }
     m.packSize = Math.max(1, parseInt(v("packSize"),10) || 28);
@@ -386,24 +567,27 @@ function collect(){
     if (np !== m.nextPill){ m.nextPill = np; m.packReset = new Date().toISOString(); }
   });
 }
-const med = id => state.meds.find(m => m.id === id);
 
 /* ---------- shell ---------- */
-const titles = {today:"Today", pack:"Pack check", history:"History", settings:"Settings"};
 function render(){
   if (!state) return;
   if (!state.setupDone) tab = "settings";
-  document.getElementById("title").textContent = titles[tab];
-  document.getElementById("today").textContent = new Date().toLocaleDateString(undefined,{weekday:"long", day:"numeric", month:"long"});
+  document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
+  document.title = lang === "zh" ? "我的药" : "My Pills";
+  document.querySelectorAll("[data-t]").forEach(el => el.textContent = t(el.dataset.t));
+  document.getElementById("title").textContent = !state.setupDone ? (lang === "zh" ? "我的药" : "My Pills")
+    : t({today:"navToday", pack:"navPack", history:"navHistory", settings:"navSettings"}[tab]);
+  document.getElementById("today").textContent = new Date().toLocaleDateString(loc(),{weekday:"long", day:"numeric", month:"long"});
   document.querySelectorAll("nav button").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
+  document.querySelector("nav").style.display = state.setupDone ? "" : "none";
   ({today:viewToday, pack:viewPack, history:viewHistory, settings:viewSettings})[tab]();
   showSyncLine();
 }
 document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
-  if (!state.setupDone && b.dataset.tab !== "settings") return;
+  if (!state.setupDone) return;
+  if (tab === "settings") formError = "";
   tab = b.dataset.tab; render(); window.scrollTo(0,0);
 });
-// refresh when the day changes or the app comes back to the front
 let lastDay = todayKey();
 document.addEventListener("visibilitychange", () => { if (!document.hidden && todayKey() !== lastDay){ lastDay = todayKey(); render(); } });
 setInterval(() => { if (todayKey() !== lastDay){ lastDay = todayKey(); render(); } }, 60000);
@@ -412,12 +596,13 @@ setInterval(() => { if (todayKey() !== lastDay){ lastDay = todayKey(); render();
 function deviceName(){ return setting("device") || ""; }
 function syncCardHtml(){
   const last = setting("lastExport"), lastIn = setting("lastImport");
-  return `<h2>Sync between phones</h2><div class="card">
-    <p class="note" style="margin-top:0">Data is kept on this phone only. To copy it to your other phone: <b>Export</b> here, send the file to the other phone (WhatsApp, WeChat, email, AirDrop/Files…), then <b>Import</b> it there. Importing combines both phones' records — nothing is lost.</p>
-    <label>This phone's name</label><input id="devname" placeholder="e.g. iPhone or Android" value="${esc(deviceName())}">
-    <div class="btnrow" style="margin-top:12px"><button class="btn" data-export>Export / send data</button><button class="btn ghost" data-import>Import data file</button></div>
-    <p class="note">Last export: ${last ? fmtDay(keyOf(new Date(last)))+" "+fmtTime(last) : "never"} · Last import: ${lastIn ? fmtDay(keyOf(new Date(lastIn)))+" "+fmtTime(lastIn) : "never"}</p>
-    <div style="text-align:right"><button class="link" data-paste>Import by pasting text instead</button></div>
+  const f = x => x ? fmtDay(keyOf(new Date(x)))+" "+fmtTime(x) : t("never");
+  return `<h2>${t("syncTitle")}</h2><div class="card">
+    <p class="note" style="margin-top:0">${t("syncBody")}</p>
+    <label>${t("phoneName")}</label><input id="devname" placeholder="${esc(t("phoneNamePh"))}" value="${esc(deviceName())}">
+    <div class="btnrow" style="margin-top:12px"><button class="btn" data-export>${t("exportBtn")}</button><button class="btn ghost" data-import>${t("importFile")}</button></div>
+    <p class="note">${t("lastExport",{a:f(last), b:f(lastIn)})}</p>
+    <div style="text-align:right"><button class="link" data-paste>${t("pasteImport")}</button></div>
   </div>`;
 }
 function wireSync(root){
@@ -427,22 +612,19 @@ function wireSync(root){
   root.querySelectorAll("[data-import]").forEach(b => b.onclick = pickFile);
   root.querySelectorAll("[data-paste]").forEach(b => b.onclick = pasteSheet);
 }
-function exportPayload(){
-  return { app:"mypills", format:1, exportedAt:new Date().toISOString(), device:deviceName() || "phone", state };
-}
 async function exportData(){
   const dn = document.querySelector("#devname"); if (dn) setting("device", dn.value.trim());
-  const p = exportPayload(), text = JSON.stringify(p, null, 1);
-  const dev = (deviceName() || "phone").replace(/[^A-Za-z0-9_-]+/g,"-");
-  const t = new Date(), fname = `mypills-${dev}-${keyOf(t)}-${pad(t.getHours())}${pad(t.getMinutes())}.json`;
+  const p = { app:"mypills", format:1, exportedAt:new Date().toISOString(), device:deviceName() || "phone", state };
+  const text = JSON.stringify(p, null, 1);
+  const dev = (deviceName() || "phone").replace(/[^A-Za-z0-9_-]+/g,"-") || "phone";
+  const now = new Date(), fname = `mypills-${dev}-${keyOf(now)}-${pad(now.getHours())}${pad(now.getMinutes())}.json`;
   const markDone = () => { setting("lastExport", state.updated || new Date().toISOString()); render(); };
   let file = null;
   try { file = new File([text], fname, {type:"application/json"}); } catch(e){}
   if (file && navigator.canShare && navigator.canShare({files:[file]})) {
-    try { await navigator.share({files:[file], title:"My Pills data"}); markDone(); return; }
+    try { await navigator.share({files:[file], title:"My Pills"}); markDone(); return; }
     catch(e){ if (e && e.name === "AbortError") return; }
   }
-  // fallback: download + copy option
   try {
     const url = URL.createObjectURL(new Blob([text], {type:"application/json"}));
     const a = document.createElement("a"); a.href = url; a.download = fname; document.body.appendChild(a); a.click(); a.remove();
@@ -450,74 +632,73 @@ async function exportData(){
   } catch(e){}
   markDone();
   const d = document.getElementById("dlg");
-  d.innerHTML = `<div class="scrim"><div class="sheet"><h3>Exported</h3>
-    <p class="note">The file <b>${esc(fname)}</b> was saved to your Downloads. If you can't find it, copy the data as text and paste it into a message to yourself instead.</p>
-    <div class="btnrow"><button class="btn ghost" data-copy>Copy as text</button><button class="btn" data-x>Done</button></div></div></div>`;
+  d.innerHTML = `<div class="scrim"><div class="sheet"><h3>${t("exported")}</h3>
+    <p class="note">${t("exportedBody",{f:esc(fname)})}</p>
+    <div class="btnrow"><button class="btn ghost" data-copy>${t("copyText")}</button><button class="btn" data-x>${t("done")}</button></div></div></div>`;
   d.querySelector("[data-x]").onclick = closeDlg;
   d.querySelector("[data-copy]").onclick = async (ev) => {
-    try { await navigator.clipboard.writeText(text); ev.target.textContent = "Copied ✓"; } catch(e){ ev.target.textContent = "Couldn't copy"; }
+    try { await navigator.clipboard.writeText(text); ev.target.textContent = t("copied"); } catch(e){ ev.target.textContent = t("cantCopy"); }
   };
 }
 function pickFile(){
   // A real input kept in the page, with no file-type filter: some phones grey out
   // .json files or ignore a picker that isn't attached to the page.
   const inp = document.getElementById("filepick");
-  inp.value = "";
-  inp.click();
+  inp.value = ""; inp.click();
 }
 function onFilePicked(){
   const inp = document.getElementById("filepick");
   const f = inp.files && inp.files[0]; if (!f) return;
   const r = new FileReader();
   r.onload = () => handleImport(String(r.result));
-  r.onerror = () => importError("Couldn't read that file. Try “Paste text instead”.");
+  r.onerror = () => importError(t("readFail"));
   r.readAsText(f);
 }
 function pasteSheet(){
   const d = document.getElementById("dlg");
-  d.innerHTML = `<div class="scrim"><div class="sheet"><h3>Paste data</h3>
-    <p class="note">Open the data file (or the message it came in), select all of its text, copy it, and paste it here. It starts with <code>{"app":"mypills"</code>.</p>
+  d.innerHTML = `<div class="scrim"><div class="sheet"><h3>${t("pasteTitle")}</h3>
+    <p class="note">${t("pasteBody")}</p>
     <textarea id="pastebox" style="width:100%;height:140px;font:13px monospace;border:1.5px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);padding:8px"></textarea>
-    <div class="btnrow"><button class="btn ghost" data-x>Cancel</button><button class="btn" data-ok>Import</button></div></div></div>`;
+    <div class="btnrow"><button class="btn ghost" data-x>${t("cancel")}</button><button class="btn" data-ok>${t("importBtn")}</button></div></div></div>`;
   d.querySelector("[data-x]").onclick = closeDlg;
-  d.querySelector("[data-ok]").onclick = () => { const t = d.querySelector("#pastebox").value; closeDlg(); handleImport(t); };
+  d.querySelector("[data-ok]").onclick = () => { const v = d.querySelector("#pastebox").value; closeDlg(); handleImport(v); };
 }
-function importError(msg){ confirmSheet("Import failed", esc(msg), "OK", () => {}); }
+function importError(msg){ infoSheet(t("importFailed"), esc(msg)); }
 function validState(s){
   return s && Array.isArray(s.meds) && Array.isArray(s.log) &&
     s.meds.every(m => m && typeof m.id === "string" && typeof m.name === "string" && Number.isFinite(+m.packSize) && Number.isFinite(+m.nextPill)) &&
     s.log.every(e => e && typeof e.id === "string" && typeof e.med === "string" && /^\d{4}-\d\d-\d\d$/.test(e.date));
 }
 function handleImport(text){
-  let p; try { p = JSON.parse(text.trim()); } catch(e){ return importError("That doesn't look like a My Pills data file."); }
-  const inc = p && p.app === "mypills" ? p.state : p; // also accept a bare state
-  if (!validState(inc)) return importError("That doesn't look like a My Pills data file.");
+  let p; try { p = JSON.parse(text.trim()); } catch(e){ return importError(t("notOurFile")); }
+  const inc = p && p.app === "mypills" ? p.state : p;
+  if (!validState(inc)) return importError(t("notOurFile"));
   inc.setupDone = true;
   const doses = inc.log.filter(e => !e.skipped).length;
-  const when = p.exportedAt ? fmtDay(keyOf(new Date(p.exportedAt))) + " " + fmtTime(p.exportedAt) : "unknown time";
+  const when = p.exportedAt ? fmtDay(keyOf(new Date(p.exportedAt))) + " " + fmtTime(p.exportedAt) : t("unknownTime");
   const finish = (newState, how) => {
-    state = newState; state.updated = new Date().toISOString(); saveLocal();
+    state = newState; state.updated = new Date().toISOString(); saveLocal(); formError = "";
     setting("lastImport", new Date().toISOString());
     tab = "pack"; render();
-    confirmSheet("Imported ✓", `${how}. Please check the pill numbers on the Pack check screen against your packs.`, "OK", () => {});
+    infoSheet(t("imported"), t("importedBody",{how}));
   };
-  const d = document.getElementById("dlg");
   const fresh = !state.setupDone;
-  d.innerHTML = `<div class="scrim"><div class="sheet"><h3>Import data</h3>
-    <p class="note">From <b>${esc(p.device || "another phone")}</b>, exported ${when}: ${inc.meds.length} medicine${inc.meds.length===1?"":"s"}, ${doses} dose${doses===1?"":"s"} recorded.</p>
-    ${fresh ? "" : `<p class="note"><b>Combine</b> keeps every dose recorded on either phone (recommended). <b>Replace</b> throws away this phone's data and uses the file only.</p>`}
-    <div class="btnrow">${fresh ? `<button class="btn ghost" data-x>Cancel</button><button class="btn" data-merge>Import</button>`
-      : `<button class="btn ghost" data-replace>Replace</button><button class="btn" data-merge>Combine</button>`}</div>
-    ${fresh ? "" : `<div style="text-align:center;margin-top:8px"><button class="link" data-x>Cancel</button></div>`}</div></div>`;
+  const d = document.getElementById("dlg");
+  d.innerHTML = `<div class="scrim"><div class="sheet"><h3>${t("importTitle")}</h3>
+    <p class="note">${t("importSummary",{dev:esc(p.device || t("anotherPhone")), when, m:inc.meds.length, d:doses})}</p>
+    ${fresh ? "" : `<p class="note">${t("combineExplain")}</p>`}
+    <div class="btnrow">${fresh ? `<button class="btn ghost" data-x>${t("cancel")}</button><button class="btn" data-merge>${t("importBtn")}</button>`
+      : `<button class="btn ghost" data-replace>${t("replace")}</button><button class="btn" data-merge>${t("combine")}</button>`}</div>
+    ${fresh ? "" : `<div style="text-align:center;margin-top:8px"><button class="link" data-x>${t("cancel")}</button></div>`}</div></div>`;
   d.querySelectorAll("[data-x]").forEach(b => b.onclick = closeDlg);
-  d.querySelector("[data-merge]").onclick = () => { closeDlg(); finish(mergeStates(state, JSON.parse(JSON.stringify(inc))), fresh ? "Data imported" : "Both phones' records combined"); };
+  d.querySelector("[data-merge]").onclick = () => { closeDlg(); finish(mergeStates(state, JSON.parse(JSON.stringify(inc))), fresh ? t("howImported") : t("howCombined")); };
   const rb = d.querySelector("[data-replace]");
-  if (rb) rb.onclick = () => { closeDlg(); confirmSheet("Replace this phone's data?", "Any doses recorded only on this phone will be lost.", "Replace", () => finish(JSON.parse(JSON.stringify(inc)), "Data replaced")); };
+  if (rb) rb.onclick = () => { closeDlg(); confirmSheet(t("replaceTitle"), t("replaceBody"), t("replace"), () => finish(JSON.parse(JSON.stringify(inc)), t("howReplaced"))); };
 }
 
 /* ---------- merge two phones' data ---------- */
-// Doses recorded on either phone are kept (nothing is lost if one phone was offline).
-// Undos are remembered so they don't come back. Medicine settings come from whichever was saved last.
+// Doses recorded on either phone are kept. Undos are remembered so they don't come back.
+// Medicine settings come from whichever was saved last.
 function mergeStates(local, remote){
   if (!local || !local.setupDone) return remote;
   if (!remote || !remote.setupDone) return local;
@@ -527,13 +708,12 @@ function mergeStates(local, remote){
   const byKey = new Map();
   [...newer.log, ...(newer === remote ? local.log : remote.log)].forEach(e => {
     if (removed.has(e.id)) return;
-    const k = e.med + "|" + e.date;           // one entry per medicine per day
+    const k = e.med + "|" + e.date;
     if (!byKey.has(k)) byKey.set(k, e);
   });
   out.log = [...byKey.values()];
   out.removed = [...removed].slice(-300);
   out.updated = newer.updated;
-  // pack count must be past every pill recorded on either phone
   out.meds.forEach(m => {
     out.log.forEach(e => { if (e.med === m.id && !e.skipped && e.pill >= m.nextPill && e.at > (m.packReset || "")) m.nextPill = e.pill + 1; });
   });
@@ -542,6 +722,7 @@ function mergeStates(local, remote){
 
 /* ---------- boot ---------- */
 state = loadLocal() || defaultState();
+if (!state.setupDone && !state.meds.length) state.meds.push(newMed());
 document.getElementById("filepick").addEventListener("change", onFilePicked);
 try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch(e){}
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
