@@ -98,6 +98,7 @@ ol.steps{padding-left:20px;margin:8px 0}ol.steps li{margin:6px 0}
   <button data-tab="settings"><span class="ic">⚙︎</span>Settings</button>
 </div></nav>
 <div id="dlg"></div>
+<input type="file" id="filepick" style="position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0">
 
 <script>
 (function(){
@@ -321,6 +322,7 @@ function viewSettings(){
   let html = first ? `<div class="card" style="margin-top:16px;border-color:var(--accent)"><div class="name">Welcome 👋</div>
     <p class="note">Have a My Pills data file from your other phone? Import it and you're done:</p>
     <button class="btn" data-import>Import data file</button>
+    <div style="text-align:center;margin-top:6px"><button class="link" data-paste>File won't open? Paste the text instead</button></div>
     <p class="note">Or set up your medicines below. For each pack, enter how many pills it holds and the number of the <b>next full pill</b> on the pack right now.</p></div>` : syncCardHtml();
   state.meds.forEach((m,idx) => {
     const nd = m.every > 1 ? nextDue(m, todayKey()) : todayKey();
@@ -449,16 +451,24 @@ async function exportData(){
   };
 }
 function pickFile(){
-  const inp = document.createElement("input");
-  inp.type = "file"; inp.accept = ".json,application/json,text/plain,*/*";
-  inp.onchange = () => { const f = inp.files && inp.files[0]; if (!f) return;
-    const r = new FileReader(); r.onload = () => handleImport(String(r.result)); r.onerror = () => importError("Couldn't read that file."); r.readAsText(f); };
+  // A real input kept in the page, with no file-type filter: some phones grey out
+  // .json files or ignore a picker that isn't attached to the page.
+  const inp = document.getElementById("filepick");
+  inp.value = "";
   inp.click();
+}
+function onFilePicked(){
+  const inp = document.getElementById("filepick");
+  const f = inp.files && inp.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = () => handleImport(String(r.result));
+  r.onerror = () => importError("Couldn't read that file. Try “Paste text instead”.");
+  r.readAsText(f);
 }
 function pasteSheet(){
   const d = document.getElementById("dlg");
   d.innerHTML = `<div class="scrim"><div class="sheet"><h3>Paste data</h3>
-    <p class="note">Paste the text you copied from the other phone.</p>
+    <p class="note">Open the data file (or the message it came in), select all of its text, copy it, and paste it here. It starts with <code>{"app":"mypills"</code>.</p>
     <textarea id="pastebox" style="width:100%;height:140px;font:13px monospace;border:1.5px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);padding:8px"></textarea>
     <div class="btnrow"><button class="btn ghost" data-x>Cancel</button><button class="btn" data-ok>Import</button></div></div></div>`;
   d.querySelector("[data-x]").onclick = closeDlg;
@@ -524,6 +534,7 @@ function mergeStates(local, remote){
 
 /* ---------- boot ---------- */
 state = loadLocal() || defaultState();
+document.getElementById("filepick").addEventListener("change", onFilePicked);
 try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch(e){}
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
   navigator.serviceWorker.register("sw.js").catch(()=>{});
